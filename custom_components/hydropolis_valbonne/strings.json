@@ -1,0 +1,38 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Account already configured."
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Hydropolis Valbonne portal.",
+      "invalid_auth": "Invalid username or password.",
+      "unknown": "Unexpected error occurred."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "description": "Enter your Hydropolis Valbonne customer portal credentials.",
+        "title": "Hydropolis Valbonne"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "daily_water_consumption": {
+        "name": "Daily water consumption"
+      },
+      "monthly_water_consumption": {
+        "name": "Monthly water consumption"
+      },
+      "yearly_water_consumption": {
+        "name": "Yearly water consumption"
+      },
+      "last_meter_index": {
+        "name": "Last meter index"
+      }
+    }
+  }
+}
