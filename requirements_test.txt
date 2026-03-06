@@ -1,0 +1,14 @@
+# Test requirements for hydropolis_valbonne
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+pytest-timeout>=2.1.0
+
+# HA test harness (provides hass fixture, MockConfigEntry, recorder, etc.)
+pytest-homeassistant-custom-component>=0.13.160
+
+# Credentials from .env file
+python-dotenv>=1.0.0
+
+# Snapshot testing
+syrupy>=4.6.0

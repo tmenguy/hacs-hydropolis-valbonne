@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hydropolis Login",
+        "description": "Enter your Hydropolis subscriber portal credentials.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "select_contract": {
+        "title": "Select contract",
+        "description": "Multiple contracts found. Please select the one to monitor.",
+        "data": {
+          "contrat_id": "Contract"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Unable to connect to Hydropolis. Please try again later.",
+      "no_contracts": "No water contracts found for this account.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This contract is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "water_meter": {
+        "name": "Water meter"
+      }
+    }
+  }
+}

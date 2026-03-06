@@ -1,0 +1,11 @@
+{
+  "domain": "hydropolis_valbonne",
+  "name": "Hydropolis Valbonne",
+  "version": "2026.03.06",
+  "codeowners": ["@tmenguy"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/tmenguy/hacs-hydropolis-valbonne",
+  "iot_class": "cloud_polling",
+  "requirements": []
+}
