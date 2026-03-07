@@ -712,7 +712,7 @@ Tests are skipped when credentials are absent (`@pytest.mark.skipif`).
 ### 9.1 Repository Layout
 
 ```
-hacs-hydropolis-valbonne/
+ha-hydropolis-valbonne/
 ├── custom_components/
 │   ├── __init__.py                          # Empty (required for pytest discovery)
 │   └── hydropolis_valbonne/

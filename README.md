@@ -1,8 +1,8 @@
 # Hydropolis Valbonne
 
-![GitHub Release](https://img.shields.io/github/v/release/tmenguy/hacs-hydropolis-valbonne?style=for-the-badge)
+![GitHub Release](https://img.shields.io/github/v/release/tmenguy/ha-hydropolis-valbonne?style=for-the-badge)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-![License](https://img.shields.io/github/license/tmenguy/hacs-hydropolis-valbonne?style=for-the-badge)
+![License](https://img.shields.io/github/license/tmenguy/ha-hydropolis-valbonne?style=for-the-badge)
 
 A [Home Assistant](https://www.home-assistant.io/) custom component to monitor water consumption from [SPL Hydropolis](https://www.hydropolis-sophia.fr/), the water utility serving Valbonne and the Sophia Antipolis area in France.
 
@@ -21,9 +21,9 @@ A [Home Assistant](https://www.home-assistant.io/) custom component to monitor w
 1. Install [HACS](https://hacs.xyz/) if you haven't already.
 2. Click the button below to add this repository to HACS:
 
-   [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tmenguy&repository=hacs-hydropolis-valbonne&category=integration)
+   [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tmenguy&repository=ha-hydropolis-valbonne&category=integration)
 
-   Alternatively, in Home Assistant go to **HACS > Integrations**, click the three-dot menu in the top-right corner, select **Custom repositories**, and add `https://github.com/tmenguy/hacs-hydropolis-valbonne` with category **Integration**.
+   Alternatively, in Home Assistant go to **HACS > Integrations**, click the three-dot menu in the top-right corner, select **Custom repositories**, and add `https://github.com/tmenguy/ha-hydropolis-valbonne` with category **Integration**.
 
 3. Search for **Hydropolis Valbonne** and click **Download**.
 4. Restart Home Assistant.
