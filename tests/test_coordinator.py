@@ -40,18 +40,25 @@ async def test_first_refresh_fetches_full_history(
     mock_hydropolis_client.get_daily_measures.assert_called()
 
 
-async def test_no_measures_first_run_raises(
+async def test_no_measures_first_run_loads_gracefully(
     hass: HomeAssistant,
     mock_config_entry,
     mock_hydropolis_client,
 ):
-    """If no measures come back on the first refresh, entry fails to load."""
+    """If no measures come back on the first refresh, entry still loads.
+
+    The API legitimately returns no data when there are no new measures.
+    The sensor will show 'unknown' until data arrives, but the
+    integration should not go into SETUP_RETRY.
+    """
     mock_hydropolis_client.get_daily_measures = AsyncMock(return_value=[])
 
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    coordinator: HydropolisCoordinator = mock_config_entry.runtime_data
+    assert coordinator.data is None
 
 
 async def test_no_new_measures_keeps_previous(
@@ -86,21 +93,17 @@ async def test_api_error_raises_update_failed(
     assert coordinator.last_update_success is False
 
 
-async def test_statistic_id_matches_entity_id(
+async def test_statistic_id_is_external(
     hass: HomeAssistant,
     mock_config_entry,
     mock_hydropolis_client,
 ):
-    """Verify that sensor_statistic_id uses the entity registry, not DOMAIN."""
+    """The statistic_id should be an external-source ID (domain:identifier)."""
     coordinator = await _setup(hass, mock_config_entry)
 
-    stat_id = coordinator.sensor_statistic_id
-    assert stat_id is not None
-    assert DOMAIN not in stat_id.replace("sensor.", ""), (
-        f"statistic_id should NOT contain the domain name: {stat_id}"
-    )
-    assert FAKE_CONTRAT_ID in stat_id
-    assert stat_id.startswith("sensor.")
+    stat_id = coordinator.statistic_id
+    assert stat_id == f"{DOMAIN}:{FAKE_CONTRAT_ID}_water_meter"
+    assert stat_id.startswith(f"{DOMAIN}:")
 
 
 async def test_incremental_refresh(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import UnitOfVolume
 from homeassistant.core import HomeAssistant
 
@@ -44,14 +44,16 @@ async def test_sensor_device_class(
     assert state.attributes["device_class"] == SensorDeviceClass.WATER
 
 
-async def test_sensor_state_class(
+async def test_sensor_no_state_class(
     hass: HomeAssistant,
     mock_config_entry,
     mock_hydropolis_client,
 ):
+    """state_class is intentionally omitted to prevent HA from auto-generating
+    statistics that would conflict with our async_import_statistics calls."""
     state = await _get_sensor_state(hass, mock_config_entry)
     assert state is not None
-    assert state.attributes["state_class"] == SensorStateClass.TOTAL_INCREASING
+    assert "state_class" not in state.attributes
 
 
 async def test_sensor_unit(

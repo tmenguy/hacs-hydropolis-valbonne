@@ -10,6 +10,7 @@ from homeassistant.components.recorder.models import StatisticData, StatisticMet
 from homeassistant.components.recorder.statistics import (
     StatisticMeanType,
     StatisticsRow,
+    async_add_external_statistics,
     async_import_statistics,
     get_last_statistics,
 )
@@ -17,7 +18,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, UnitOfVolume
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 import homeassistant.util.dt as dt_util
@@ -49,6 +49,11 @@ class HydropolisCoordinator(DataUpdateCoordinator[HydropolisData]):
     HA database and only fetches data from the API starting after that date.
     On the very first run (no statistics yet), it pulls all available history
     back to the contract start date.
+
+    Statistics are imported as an external source (not "recorder") so they
+    don't conflict with HA's auto-generated statistics from entity state
+    changes.  The sensor entity intentionally has no state_class for the
+    same reason.
     """
 
     _client: HydropolisClient
@@ -67,19 +72,9 @@ class HydropolisCoordinator(DataUpdateCoordinator[HydropolisData]):
         self._serial: str = config_entry.data["compteur_numserie"]
 
     @property
-    def _sensor_unique_id(self) -> str:
-        """The unique_id we assign to the water meter sensor entity."""
-        return f"{self._contrat_id}_water_meter"
-
-    @property
-    def sensor_statistic_id(self) -> str | None:
-        """Look up the real entity_id from the entity registry.
-
-        Returns None if the sensor entity has not been registered yet
-        (e.g. during the very first coordinator refresh, before platform setup).
-        """
-        registry = er.async_get(self.hass)
-        return registry.async_get_entity_id("sensor", DOMAIN, self._sensor_unique_id)
+    def statistic_id(self) -> str:
+        """Deterministic external-statistics ID for the Energy dashboard."""
+        return f"{DOMAIN}:{self._contrat_id}_water_meter"
 
     async def _async_setup(self) -> None:
         session = async_get_clientsession(self.hass)
@@ -91,12 +86,16 @@ class HydropolisCoordinator(DataUpdateCoordinator[HydropolisData]):
         if not await self._client.authenticate():
             raise ConfigEntryError("Invalid credentials for Hydropolis")
 
-    async def _async_update_data(self) -> HydropolisData:
+    async def _async_update_data(self) -> HydropolisData | None:
         """Incremental fetch: get data from last known stat to today.
 
         First run pulls full history; subsequent runs only the gap.
         Also imports all fetched data into HA long-term statistics so
         the Energy dashboard has complete history.
+
+        Returns None (instead of raising) when the API has no data yet,
+        so the integration loads normally and the sensor can fall back
+        to its restored state.
         """
         today = dt_util.now().date()
 
@@ -124,7 +123,16 @@ class HydropolisCoordinator(DataUpdateCoordinator[HydropolisData]):
             if self.data is not None:
                 _LOGGER.debug("No new measures, keeping previous reading")
                 return self.data
-            raise UpdateFailed("No measures returned from Hydropolis API")
+            if last_stat is not None:
+                _LOGGER.info(
+                    "No new measures from API; restoring from last recorded statistic"
+                )
+                return HydropolisData(
+                    meter_total_liters=int(last_stat["sum"]),
+                    last_measurement=datetime.fromtimestamp(last_stat["start"]),
+                )
+            _LOGGER.info("No measures available from Hydropolis API yet")
+            return None
 
         self._import_statistics(measures)
 
@@ -142,14 +150,12 @@ class HydropolisCoordinator(DataUpdateCoordinator[HydropolisData]):
         )
 
     def _import_statistics(self, measures: list[DailyMeasure]) -> None:
-        """Push fetched daily measures into HA long-term statistics."""
-        statistic_id = self.sensor_statistic_id
-        if statistic_id is None:
-            _LOGGER.debug(
-                "Sensor entity not yet registered, deferring statistics import"
-            )
-            return
+        """Push fetched daily measures into HA long-term statistics.
 
+        Uses an external source (DOMAIN, not "recorder") so the entries
+        are independent of any auto-generated statistics from entity state
+        changes.  The Energy dashboard can pick them up by statistic_id.
+        """
         statistics: list[StatisticData] = []
         for measure in measures:
             if measure.consumption_liters < 0:
@@ -168,25 +174,23 @@ class HydropolisCoordinator(DataUpdateCoordinator[HydropolisData]):
         metadata = StatisticMetaData(
             mean_type=StatisticMeanType.NONE,
             has_sum=True,
-            name="Water meter",
-            source="recorder",
-            statistic_id=statistic_id,
+            name=f"Hydropolis {self._contrat_id} Water",
+            source=DOMAIN,
+            statistic_id=self.statistic_id,
             unit_class=VolumeConverter.UNIT_CLASS,
             unit_of_measurement=UnitOfVolume.LITERS,
         )
 
-        async_import_statistics(self.hass, metadata, statistics)
-        _LOGGER.debug("Imported %d statistics entries to %s", len(statistics), statistic_id)
+        async_add_external_statistics(self.hass, metadata, statistics)
+        _LOGGER.debug(
+            "Imported %d statistics entries to %s", len(statistics), self.statistic_id
+        )
 
     async def _get_last_stat(self) -> StatisticsRow | None:
-        """Find the most recent recorded statistic for this sensor."""
-        statistic_id = self.sensor_statistic_id
-        if statistic_id is None:
-            return None
-
+        """Find the most recent recorded statistic."""
         from homeassistant.components.recorder import get_instance
 
         last = await get_instance(self.hass).async_add_executor_job(
-            get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
+            get_last_statistics, self.hass, 1, self.statistic_id, True, {"sum", "state"}
         )
-        return last[statistic_id][0] if last else None
+        return last[self.statistic_id][0] if last else None

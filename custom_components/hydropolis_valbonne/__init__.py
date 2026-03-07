@@ -22,11 +22,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: HydropolisConfigEntry) -
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # The first refresh ran before sensor entity registration, so statistics
-    # import was deferred.  Now the entity exists in the registry; trigger a
-    # second refresh so historical data gets imported immediately.
-    await coordinator.async_request_refresh()
-
     return True
 
 
