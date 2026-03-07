@@ -1,7 +1,7 @@
 {
   "domain": "hydropolis_valbonne",
   "name": "Hydropolis Valbonne",
-  "version": "2026.03.06",
+  "version": "2026.03.07",
   "codeowners": ["@tmenguy"],
   "config_flow": true,
   "dependencies": ["recorder"],
