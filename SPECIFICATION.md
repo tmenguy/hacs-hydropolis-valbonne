@@ -41,11 +41,10 @@ The Hydropolis subscriber portal (`https://abonnes.hydropolis-sophia.fr`) is a
 Single Page Application (Backbone.js + jQuery + Handlebars) that talks to three
 chained back-end APIs, all operated by **JVS-Mairistem**:
 
-```
-┌──────────────────┐     ┌──────────────────────┐     ┌──────────────────────────┐
-│  Omega SSO API   │────▶│   Omega Main API      │────▶│    3Int Partner API       │
-│  (authentication)│     │   (contracts, users)   │     │   (meter measures)        │
-└──────────────────┘     └──────────────────────────┘   └──────────────────────────┘
+```mermaid
+flowchart LR
+    OmegaSSO["Omega SSO API<br/>(authentication)"] --> OmegaMain["Omega Main API<br/>(contracts, users)"]
+    OmegaMain --> ThreeInt["3Int Partner API<br/>(meter measures)"]
 ```
 
 ### 2.1 Omega SSO API
@@ -202,41 +201,26 @@ both the Omega token and the 3Int token and re-authenticate from scratch
 
 ## 3. Authentication Flow
 
-```
-  ┌─────────┐          ┌───────────┐         ┌───────────┐         ┌──────────┐
-  │  User    │          │ Omega SSO │         │ Omega API │         │ 3Int API │
-  │ (HA)    │          │           │         │           │         │          │
-  └────┬────┘          └─────┬─────┘         └─────┬─────┘         └────┬─────┘
-       │   POST /signin      │                     │                    │
-       │────────────────────▶│                     │                    │
-       │   201 + headers     │                     │                    │
-       │◀────────────────────│                     │                    │
-       │      (token,ssoid,appid)                  │                    │
-       │                     │                     │                    │
-       │   GET /contrat      │                     │                    │
-       │────────────────────────────────────────▶  │                    │
-       │   JSON:API response │                     │                    │
-       │◀──────────────────────────────────────────│                    │
-       │   (contrat_id, numserie)                  │                    │
-       │                     │                     │                    │
-       │   POST /authentication_token              │                    │
-       │───────────────────────────────────────────────────────────────▶│
-       │   { token: "..." }  │                     │                    │
-       │◀──────────────────────────────────────────────────────────────│
-       │   (3int_jwt with datedeb claim)           │                    │
-       │                     │                     │                    │
-       │   GET /measures?...&page=1                │                    │
-       │───────────────────────────────────────────────────────────────▶│
-       │   [...measures...]  │                     │                    │
-       │◀──────────────────────────────────────────────────────────────│
-       │   GET /measures?...&page=2                │                    │
-       │───────────────────────────────────────────────────────────────▶│
-       │   [...measures...]  │                     │                    │
-       │◀──────────────────────────────────────────────────────────────│
-       │   GET /measures?...&page=N                │                    │
-       │───────────────────────────────────────────────────────────────▶│
-       │   [] (empty = done) │                     │                    │
-       │◀──────────────────────────────────────────────────────────────│
+```mermaid
+sequenceDiagram
+    participant HA as HA Client
+    participant SSO as Omega SSO
+    participant API as Omega API
+    participant TI as 3Int API
+
+    HA->>SSO: POST /v1/sso/signin
+    SSO-->>HA: 201 + headers (token, ssoid, appid)
+
+    HA->>API: GET /v1/iclient/contrat?len=0
+    API-->>HA: JSON:API (contrat_id, numserie)
+
+    HA->>TI: POST /authentication_token
+    TI-->>HA: { token: 3int_jwt } (with datedeb claim)
+
+    loop Paginate until empty
+        HA->>TI: GET /measures?...&page=N
+        TI-->>HA: [...measures...] or []
+    end
 ```
 
 Summary:
@@ -289,7 +273,33 @@ used for HA statistics and the sensor's native value.
 
 ## 5. Home Assistant Integration Architecture
 
-### 5.1 File Layout
+### 5.1 Component Overview
+
+```mermaid
+flowchart TD
+    subgraph configFlow [Config Flow]
+        StepUser["async_step_user<br/>(credentials)"] --> StepContract["async_step_select_contract<br/>(if multiple)"]
+    end
+
+    subgraph runtime [Runtime]
+        Init["__init__.py<br/>async_setup_entry"] --> Coord["HydropolisCoordinator<br/>(12h refresh)"]
+        Coord --> ApiClient["HydropolisClient<br/>(api.py)"]
+        Coord --> Stats["async_add_external_statistics<br/>(recorder)"]
+        Coord --> Sensor["HydropolisWaterMeterSensor<br/>(sensor.py)"]
+        Sensor --> Restore["RestoreEntity<br/>(persists state)"]
+    end
+
+    subgraph external [External]
+        ApiClient --> OmegaSSO["Omega SSO"]
+        ApiClient --> OmegaAPI["Omega API"]
+        ApiClient --> ThreeIntAPI["3Int API"]
+        Stats --> EnergyDash["Energy Dashboard<br/>(water section)"]
+    end
+
+    configFlow --> Init
+```
+
+### 5.2 File Layout
 
 ```
 custom_components/hydropolis_valbonne/
@@ -305,7 +315,7 @@ custom_components/hydropolis_valbonne/
     └── en.json          # English translations
 ```
 
-### 5.2 Constants (`const.py`)
+### 5.3 Constants (`const.py`)
 
 | Constant               | Value                                                               |
 |------------------------|---------------------------------------------------------------------|
@@ -318,7 +328,7 @@ custom_components/hydropolis_valbonne/
 | `THREINT_API_URL`      | `"https://api2.hydropolis-sophia.fr/api"`                           |
 | `THREINT_API_ID`       | Same as `OMEGA_API_ID`                                              |
 
-### 5.3 Config Flow (`config_flow.py`)
+### 5.4 Config Flow (`config_flow.py`)
 
 Two-step flow:
 
@@ -346,11 +356,36 @@ The config entry stores:
 explicitly caught and re-raised before any generic `except Exception` block,
 or the abort will be swallowed and the flow will show a form instead.
 
-### 5.4 Coordinator (`coordinator.py`)
+### 5.5 Coordinator (`coordinator.py`)
 
 `HydropolisCoordinator` extends `DataUpdateCoordinator[HydropolisData | None]`.
 
 **Incremental fetch logic in `_async_update_data`:**
+
+```mermaid
+flowchart TD
+    Start["_async_update_data"] --> GetLastStat["get_last_statistics(statistic_id)"]
+    GetLastStat --> HasStat{last_stat exists?}
+
+    HasStat -->|Yes| Incremental["start = last_recorded + 1 day"]
+    HasStat -->|No| FirstRun["start = data_available_since<br/>or today - 4 years"]
+
+    Incremental --> Fetch["get_daily_measures(start, today)<br/>(paginated)"]
+    FirstRun --> Fetch
+
+    Fetch --> HasMeasures{measures returned?}
+
+    HasMeasures -->|Yes| Import["_import_statistics(measures)"]
+    Import --> ReturnLatest["return HydropolisData<br/>(latest meter_index)"]
+
+    HasMeasures -->|No| HasPrev{self.data exists?}
+    HasPrev -->|Yes| KeepPrev["return self.data<br/>(unchanged)"]
+    HasPrev -->|No| HasLastStat2{last_stat exists?}
+    HasLastStat2 -->|Yes| Reconstruct["return HydropolisData<br/>(from last_stat)"]
+    HasLastStat2 -->|No| ReturnNone["return None<br/>(sensor shows unknown)"]
+```
+
+Summary of the steps:
 
 1. Query `get_last_statistics` for the most recent recorded statistic
    (by `statistic_id`).
@@ -382,7 +417,7 @@ Each `StatisticData` entry:
 - `state` = `float(measure.meter_index)` (cumulative total)
 - `sum` = `float(measure.meter_index)` (cumulative total)
 
-### 5.5 Sensor (`sensor.py`)
+### 5.6 Sensor (`sensor.py`)
 
 `HydropolisWaterMeterSensor` inherits from:
 - `CoordinatorEntity[HydropolisCoordinator]`
@@ -409,7 +444,7 @@ The `native_value` property checks in order:
 The `extra_state_attributes` dict contains `last_measurement` (ISO timestamp
 of the most recent API measurement).
 
-### 5.6 Entry Setup (`__init__.py`)
+### 5.7 Entry Setup (`__init__.py`)
 
 ```python
 async def async_setup_entry(hass, entry):
@@ -424,7 +459,7 @@ The coordinator's `_async_setup` (called automatically by
 `async_config_entry_first_refresh`) creates the `HydropolisClient` and
 authenticates. If credentials are invalid, `ConfigEntryError` is raised.
 
-### 5.7 Manifest (`manifest.json`)
+### 5.8 Manifest (`manifest.json`)
 
 ```json
 {
@@ -535,6 +570,21 @@ The 3Int API uses plain `application/json`.
 ## 7. Energy Dashboard Integration
 
 ### How It Works
+
+```mermaid
+flowchart LR
+    subgraph api [Cloud]
+        ThreeInt["3Int API<br/>meter measures"]
+    end
+
+    subgraph ha [Home Assistant]
+        Coord["Coordinator"] -->|"async_add_external_statistics"| Recorder["Recorder DB<br/>(statistics table)"]
+        Coord --> Sensor["Sensor Entity<br/>(display only, no state_class)"]
+        Recorder -->|"statistic_id lookup"| Dashboard["Energy Dashboard<br/>(water section)"]
+    end
+
+    ThreeInt -->|"paginated fetch"| Coord
+```
 
 The Energy dashboard's water section accepts **external statistics** as data
 sources. When configuring the dashboard, the user selects a `statistic_id`
